@@ -1,10 +1,5 @@
 # gmailfilters
 
-[![make-all](https://github.com/jessfraz/gmailfilters/workflows/make%20all/badge.svg)](https://github.com/jessfraz/gmailfilters/actions?query=workflow%3A%22make+all%22)
-[![make-image](https://github.com/jessfraz/gmailfilters/workflows/make%20image/badge.svg)](https://github.com/jessfraz/gmailfilters/actions?query=workflow%3A%22make+image%22)
-[![GoDoc](https://img.shields.io/badge/godoc-reference-5272B4.svg?style=for-the-badge)](https://godoc.org/github.com/jessfraz/gmailfilters)
-[![Github All Releases](https://img.shields.io/github/downloads/jessfraz/gmailfilters/total.svg?style=for-the-badge)](https://github.com/jessfraz/gmailfilters/releases)
-
 A tool to sync Gmail filters from a config file to your account.
 
 > **NOTE:** This makes it so the single configuration file is the only way to
@@ -49,99 +44,98 @@ Usage: gmailfilters <command>
 
 Flags:
 
-  -d, --debug       enable debug logging (default: false)
-  -e, --export      export existing filters (default: false)
-  -f, --creds-file  Gmail credential file (or env var GMAIL_CREDENTIAL_FILE) (default: <none>)
-  -t, --token-file  Gmail oauth token file (default: /tmp/token.json)
+  --creds-file    Gmail credential file (or env var GMAIL_CREDENTIAL_FILE) (default: <none>)
+  -d, --debug     enable debug logging (default: false)
+  -e, --export    export existing filters (default: false)
+  --filters-file  Filters file (or env GMAIL_FILTERS_FILE) (default: <none>)
+  --labels-file   Labels file (or env GMAIL_LABELS_FILE) (default: <none>)
+  --token-file    Gmail oauth token file (default: /tmp/token.json)
 
 Commands:
 
   version  Show the version information.
 ```
 
+To start with, export your existing Gmail filters using the `--export` option.
+
 ## Example Filter File
 
 ```toml
-[[filter]]
-query = "to:your_activity@noreply.github.com"
-archive = true
-read = true
+[[Filter]]
+[Filter.Criteria]
+Query = "list:\"*.librato.github.com>\""
+[Filter.Action]
+Label = "INBOX/github/librato"
+Archive = true
 
-[[filter]]
-query = "from:notifications@github.com LGTM"
-label = "github/LGTM"
+[[Filter]]
+[Filter.Criteria]
+Query = "list:(<cloud-computing.googlegroups.com>)"
+[Filter.Action]
+Label = "INBOX/cloud-computing"
+Archive = true
 
-[[filter]]
-query = """
-(-to:team_mention@noreply.github.com \
-(from:(notifications@github.com) AND (@jfrazelle OR @jessfraz OR to:mention@noreply.github.com OR to:author@noreply.github.com OR to:assign@noreply.github.com)))
-"""
-label = "github/mentions"
+[[Filter]]
+[Filter.Criteria]
+Query = "list:(ltrace-devel.lists.alioth.debian.org)"
+[Filter.Action]
+Label = "INBOX/ltrace-devel"
+Archive = true
 
-[[filter]]
-query = """
-to:team_mention@noreply.github.com \
--to:mention@noreply.github.com \
--to:author@noreply.github.com \
--to:assign@noreply.github.com
-"""
-label = "github/team-mention"
+[[Filter]]
+[Filter.Criteria]
+Query = "list:statsite.armon.github.com"
+[Filter.Action]
+Label = "Devel"
 
-[[filter]]
-query = """
-from:notifications@github.com \
--to:team_mention@noreply.github.com \
--to:mention@noreply.github.com \
--to:author@noreply.github.com \
--to:assign@noreply.github.com
-"""
-archive = true
+[[Filter]]
+[Filter.Criteria]
+Query = "listid:containers.lists.linux-foundation.org"
+[Filter.Action]
+Label = "INBOX/linux/conts"
+Archive = true
 
-[[filter]]
-query = "(from:me AND to:reply@reply.github.com)"
-label = "github/mentions"
 
-[[filter]]
-query = "(from:notifications@github.com)"
-label = "github"
+[[Filter]]
+[Filter.Criteria]
+From = "@world-comp.org"
+Subject = "Congress"
+[Filter.Action]
+Label = ""
+Delete = true
+```
 
-[[filter]]
-queryOr = [
-"to:plans@tripit.com",
-"to:receipts@concur.com",
-"to:plans@concur.com",
-"to:receipts@expensify.com"
-]
-delete = true
+### Example labels file
 
-[[filter]]
-queryOr = [
-"from:notifications@docker.com",
-"from:noreply@github.com",
-"from:builds@travis-ci.org"
-]
-label = "to-be-deleted"
+```toml
+[[Label]]
+Id = "Label_9"
+Name = "INBOX/apple/drivers"
+Type = "user"
 
-[[filter]]
-query = "drive-shares-noreply@google.com OR (subject:\"Invitation to comment\" AND from:me ) OR from:(*@docs.google.com)"
-label = "to-be-deleted"
+[[Label]]
+Id = "Label_10"
+Name = "INBOX/apple/kernel"
+Type = "user"
 
-[[filter]]
-query = "(from:(-me) {filename:vcs filename:ics} has:attachment) OR (subject:(\"invitation\" OR \"accepted\" OR \"tentatively accepted\" OR \"rejected\" OR \"updated\" OR \"canceled event\" OR \"declined\") when where calendar who organizer)"
-label = "to-be-deleted"
+[[Label]]
+Id = "Label_11"
+Name = "INBOX/apple/scitech"
+Type = "user"
 
-[[filter]]
-query = "list:coreos-dev@googlegroups.com"
-label = "Mailing Lists/coreos-dev"
-archiveUnlessToMe = true
+[[Label]]
+Id = "Label_14"
+Name = "INBOX/archimedes/bugs"
+Type = "user"
 
-[[filter]]
-queryOr = [
-"list:xdg-app@lists.freedesktop.org",
-"list:flatpak@lists.freedesktop.org"
-]
-label = "Mailing Lists/xdg-apps"
-archiveUnlessToMe = true
+[[Label]]
+Id = "Label_1234"
+Name = "STATSDAPP"
+BackgroundColor = "#f691b2"
+TextColor = "#994a64"
+LabelListVisibility = "show"
+MessageListVisibility = "show"
+Type = "user"
 ```
 
 ## Setup
@@ -155,3 +149,10 @@ archiveUnlessToMe = true
 
     Follow the instructions 
     [for step enabling the API here](https://developers.google.com/gmail/api/quickstart/go).
+
+2. With the credentials file saved to `creds.json`, run the following:
+```
+gmailfilters --creds-file creds.json --token-file token.json
+```
+3. Follow the URL prompt and permit the token access. Copy the provided token JSON string.
+4. Paste the token JSON back in the terminal, it should now be saved as `token.json`.

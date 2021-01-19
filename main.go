@@ -22,10 +22,24 @@ const (
 	gmailUser = "me"
 )
 
+/*
+ * Flow
+1. Read label map from gmail
+2. parse local filter rules
+3. for each rule, parse to gmail filter, create new labels if not in map
+4. parse local label rules
+5. *update* any labels that have local changes
+6. merge label map + new rules with local change file, save to export file
+*/
+
 var (
 	credsFile string
 
 	tokenFile string
+
+	filtersFile string
+
+	labelsFile string
 
 	api *gmail.Service
 
@@ -51,11 +65,11 @@ func main() {
 	p.FlagSet.BoolVar(&export, "e", false, "export existing filters")
 	p.FlagSet.BoolVar(&export, "export", false, "export existing filters")
 
-	p.FlagSet.StringVar(&credsFile, "creds-file", os.Getenv("GMAIL_CREDENTIAL_FILE"), "Gmail credential file (or env var GMAIL_CREDENTIAL_FILE)")
-	p.FlagSet.StringVar(&credsFile, "f", os.Getenv("GMAIL_CREDENTIAL_FILE"), "Gmail credential file (or env var GMAIL_CREDENTIAL_FILE)")
+	p.FlagSet.StringVar(&filtersFile, "filters-file", os.Getenv("GMAIL_FILTERS_FILE"), "Filters file (or env GMAIL_FILTERS_FILE)")
+	p.FlagSet.StringVar(&labelsFile, "labels-file", os.Getenv("GMAIL_LABELS_FILE"), "Labels file (or env GMAIL_LABELS_FILE)")
 
+	p.FlagSet.StringVar(&credsFile, "creds-file", os.Getenv("GMAIL_CREDENTIAL_FILE"), "Gmail credential file (or env var GMAIL_CREDENTIAL_FILE)")
 	p.FlagSet.StringVar(&tokenFile, "token-file", filepath.Join(os.TempDir(), "token.json"), "Gmail oauth token file")
-	p.FlagSet.StringVar(&tokenFile, "t", filepath.Join(os.TempDir(), "token.json"), "Gmail oauth token file")
 
 	// Set the before function.
 	p.Before = func(ctx context.Context) error {
@@ -105,8 +119,12 @@ func main() {
 	}
 
 	p.Action = func(ctx context.Context, args []string) error {
-		if len(args) < 1 {
-			return errors.New("must pass a path to a gmail filter configuration file")
+		if filtersFile == "" {
+			return errors.New("must set filters file location with --filters-file")
+		}
+
+		if labelsFile == "" {
+			return errors.New("must set labels file location with --labels-file")
 		}
 
 		// On ^C, or SIGTERM handle exit.
@@ -120,35 +138,53 @@ func main() {
 			}
 		}()
 
-		if export {
-			return exportExistingFilters(args[0])
-		}
-
 		labels, err := getLabelMap()
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("Decoding filters from file %s\n", args[0])
-		filters, err := decodeFile(args[0])
+		if export {
+			return exportExisting(labels, filtersFile, labelsFile)
+		}
+
+		fmt.Printf("Decoding filters from file %s\n", filtersFile)
+		filters, err := decodeFiltersFile(filtersFile)
 		if err != nil {
 			return err
 		}
+
+		localLabels, err := decodeLabelsFile(labelsFile)
+		if err != nil {
+			return err
+		}
+
+		// Convert to gmail filters first in case this fails
+		gmailFilters, err := convertToGmailFilters(filters, labels)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Converted %d local filters into %d gmail filters\n", len(filters), len(gmailFilters))
 
 		// Delete our existing filters.
 		if err := deleteExistingFilters(); err != nil {
 			return err
 		}
 
-		// Convert our filters into gmail filters and add them.
-		fmt.Printf("Updating %d filters, this might take a bit...\n", len(filters))
-		for _, f := range filters {
-			if err := f.addFilter(&labels); err != nil {
-				return err
-			}
+		// Add our gmail filters
+		fmt.Printf("Adding %d gmail filters, this might take a bit...\n", len(gmailFilters))
+		if err := addFilters(gmailFilters); err != nil {
+			return err
 		}
 
 		fmt.Printf("Successfully updated %d filters\n", len(filters))
+
+		if err := updateLabels(labels, localLabels); err != nil {
+			return err
+		}
+
+		if err := writeLabelsToFile(labels, labelsFile); err != nil {
+			return err
+		}
 
 		return nil
 	}
